@@ -15,13 +15,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - name: Force Install Dependencies
+        run: |
+          pip install pandas folium
 
       - name: Run Python script
         run: python walklog.py
@@ -30,5 +26,5 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add manhattan_walklog_map.html last_run.txt
+          git add manhattan_walklog_map.html last_run.txt || true
           git diff-index --quiet HEAD || (git commit -m "Auto-update map" && git push)
