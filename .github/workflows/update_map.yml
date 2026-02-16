@@ -1,0 +1,35 @@
+name: Update Walklog Map
+
+on:
+  repository_dispatch:
+    types: [new_walk_logged]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-map:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Python script
+        run: python walklog.py
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add manhattan_walklog_map.html last_run.txt
+          git diff-index --quiet HEAD || (git commit -m "Auto-update map" && git push)
