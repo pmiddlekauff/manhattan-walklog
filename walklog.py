@@ -3,72 +3,72 @@ import folium
 import math
 import os
 
-# 1. Pull the live data directly from your Google Sheet
+# 1. SETTINGS & URL
+# Your specific Google Sheet CSV Export URL
 SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1eTzd_iG590gVdbu6q7p0iDElsCVLr9QTSP1wRWagozg/export?format=csv&gid=1407515623"
 
-print("Fetching data from Google Sheets...")
+print("--- STARTING MANHATTAN WALKLOG UPDATE ---")
+
+# 2. FETCH DATA
 try:
+    # We read the CSV and strip any accidental spaces from headers
     df = pd.read_csv(SHEET_CSV_URL)
     df.columns = df.columns.str.strip()
-    print(f"Successfully loaded {len(df)} rows.")
+    print(f"Successfully loaded {len(df)} rows from Google Sheets.")
 except Exception as e:
-    print(f"FAILED to load CSV: {e}")
+    print(f"CRITICAL ERROR: Could not load spreadsheet. Check your Sharing settings. Error: {e}")
     exit(1)
 
-# 2. THE TIMESTAMP GATE
-latest_timestamp = str(df['Timestamp'].iloc[-1])
-cache_file = 'last_run.txt'
-
-if os.path.exists(cache_file):
-    with open(cache_file, 'r') as f:
-        last_timestamp = f.read().strip()
-    if latest_timestamp == last_timestamp:
-        print(f"No new walks logged since {last_timestamp}. Exiting.")
-        exit(0)
-
-# 3. DATA CLEANING
-df = df.fillna("")
+# 3. COORDINATE ALIGNMENT
+# These MUST match the headers in your Google Sheet Row 1 exactly
 geo_cols = ["Start Lat", "Start Lon", "End Lat", "End Lon"]
+
+print(f"Headers found in sheet: {list(df.columns)}")
+
+# Convert coordinates to numbers, turn errors into "NaN" (Not a Number)
 for col in geo_cols:
-    df[col] = pd.to_numeric(df[col], errors='coerce')
+    if col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+    else:
+        print(f"ERROR: Could not find column '{col}'. Check your spreadsheet headers.")
+        exit(1)
 
-df = df.dropna(subset=geo_cols)
+# Drop any rows that are missing coordinates (like empty rows at the bottom)
+df_clean = df.dropna(subset=geo_cols).copy()
+print(f"Processing {len(df_clean)} valid walks with coordinates.")
 
-if df.empty:
-    print("CRITICAL ERROR: No valid coordinates found in Columns M-P.")
+if df_clean.empty:
+    print("ERROR: No rows found with valid numerical coordinates in L-O.")
     exit(1)
 
 # 4. MAP GENERATION
-side_col = "Side of Street" if "Side of Street" in df.columns else "Side"
-dir_col = "Direction"
+# Set the center of the map based on your walk data
+avg_lat = df_clean["Start Lat"].mean()
+avg_lon = df_clean["Start Lon"].mean()
+m = folium.Map(location=[avg_lat, avg_lon], zoom_start=14, tiles="OpenStreetMap")
 
-pts = df[["Start Lat","Start Lon"]].values.tolist() + df[["End Lat","End Lon"]].values.tolist()
-min_lat, max_lat = min(p[0] for p in pts), max(p[0] for p in pts)
-min_lon, max_lon = min(p[1] for p in pts), max(p[1] for p in pts)
-center = [(min_lat+max_lat)/2, (min_lon+max_lon)/2]
+# Define colors for sides of the street
+side_colors = {
+    "N": "blue", "S": "red", "E": "green", "W": "purple", 
+    "BOTH": "orange", "UNKNOWN": "gray"
+}
 
-def bearing_deg(lat1, lon1, lat2, lon2):
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dlon = math.radians(lon2 - lon1)
-    y = math.sin(dlon) * math.cos(phi2)
-    x = math.cos(phi1)*math.sin(phi2) - math.sin(phi1)*math.cos(phi2)*math.cos(dlon)
-    return (math.degrees(math.atan2(y, x)) + 360) % 360
-
-m = folium.Map(location=center, zoom_start=15, tiles="OpenStreetMap")
-side_colors = {"N":"blue","S":"red","E":"green","W":"purple","BOTH":"orange","UNKNOWN":"gray"}
-
-for _, row in df.iterrows():
-    start, end = (float(row["Start Lat"]), float(row["Start Lon"])), (float(row["End Lat"]), float(row["End Lon"]))
-    color = side_colors.get(str(row.get(side_col, "UNKNOWN")).strip().upper(), "black")
+# 5. DRAW THE LINES
+for _, row in df_clean.iterrows():
+    start_coords = [row["Start Lat"], row["Start Lon"]]
+    end_coords = [row["End Lat"], row["End Lon"]]
     
-    popup_text = f"<b>{row['Street Name']}</b><br>Side: {row.get(side_col, 'N/A')}"
-    folium.PolyLine([start, end], weight=6, color=color, popup=popup_text).add_to(m)
-
-m.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]])
-m.save("manhattan_walklog_map.html")
-
-# Update cache
-with open(cache_file, 'w') as f:
-    f.write(latest_timestamp)
-
-print("Map updated successfully!")
+    # Clean up the "Side" value to match our color dictionary
+    raw_side = str(row.get("Side of Street", "UNKNOWN")).strip().upper()
+    line_color = side_colors.get(raw_side, "gray")
+    
+    # Create a nice popup when you click a line
+    popup_msg = f"<b>{row.get('Street Name', 'Unknown St')}</b><br>Side: {raw_side}"
+    
+    folium.PolyLine(
+        locations=[start_coords, end_coords],
+        weight=6,
+        color=line_color,
+        opacity=0.8,
+        popup=popup_msg
+    ).add
