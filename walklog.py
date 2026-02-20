@@ -1,13 +1,12 @@
 import pandas as pd
 import folium
-import requests
-import time
+import math
 import os
 
 # 1. SETTINGS & URL
 SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1eTzd_iG590gVdbu6q7p0iDElsCVLr9QTSP1wRWagozg/export?format=csv&gid=1407515623"
 
-print("--- STARTING MANHATTAN WALKLOG UPDATE (WITH STREET SNAPPING) ---")
+print("--- STARTING MANHATTAN WALKLOG UPDATE ---")
 
 # 2. FETCH DATA
 try:
@@ -18,8 +17,10 @@ except Exception as e:
     print(f"CRITICAL ERROR: Could not load spreadsheet: {e}")
     exit(1)
 
+# 3. COORDINATE ALIGNMENT (Columns L-O)
 # 3. COORDINATE ALIGNMENT
 geo_cols = ["Start Lat", "Start Lon", "End Lat", "End Lon"]
+print(f"Headers found in sheet: {list(df.columns)}")
 
 for col in geo_cols:
     if col in df.columns:
@@ -45,67 +46,51 @@ side_colors = {
     "BOTH": "orange", "UNKNOWN": "gray"
 }
 
+# --- THE FIX: Create our toggleable layers ---
 fg_colored = folium.FeatureGroup(name="Color Coded by Side")
-fg_coverage = folium.FeatureGroup(name="Plain Coverage", show=False)
-
-# --- THE NEW ROUTING ENGINE ---
-def get_route(start_lat, start_lon, end_lat, end_lon):
-    # OSRM expects coordinates in {longitude},{latitude} format
-    url = f"http://router.project-osrm.org/route/v1/foot/{start_lon},{start_lat};{end_lon},{end_lat}?overview=full&geometries=geojson"
-    try:
-        r = requests.get(url, timeout=10)
-        data = r.json()
-        if data.get("code") == "Ok":
-            # OSRM returns [lon, lat], but Folium draws using [lat, lon]. We have to flip them!
-            coords = data["routes"][0]["geometry"]["coordinates"]
-            return [[lat, lon] for lon, lat in coords]
-    except Exception as e:
-        print(f"OSRM Error: {e}")
-    
-    # The Safety Net: If routing fails, return the straight line
-    return [[start_lat, start_lon], [end_lat, end_lon]]
+fg_coverage = folium.FeatureGroup(name="Plain Coverage", show=False) # 'show=False' turns this off by default when you load the page
 
 # 5. DRAW THE LINES
-for index, row in df_clean.iterrows():
-    start_lat, start_lon = row["Start Lat"], row["Start Lon"]
-    end_lat, end_lon = row["End Lat"], row["End Lon"]
-    
-    print(f"Fetching street route for walk {index + 1}...")
-    route_coords = get_route(start_lat, start_lon, end_lat, end_lon)
-    
+for _, row in df_clean.iterrows():
+    start_coords = [row["Start Lat"], row["Start Lon"]]
+    end_coords = [row["End Lat"], row["End Lon"]]
+
+    # Use 'Side' as found in your log headers
     raw_side = str(row.get("Side", "UNKNOWN")).strip().upper()
     line_color = side_colors.get(raw_side, "gray")
+
     popup_msg = f"<b>{row.get('Street Name', 'Unknown St')}</b><br>Side: {raw_side}"
-    
-    # Draw colored line
+
+    # Corrected syntax: .add_to(m) instead of .add(m)
+    # Draw the colored line and add it to the "fg_colored" layer
     folium.PolyLine(
-        locations=route_coords,
+        locations=[start_coords, end_coords],
         weight=6,
         color=line_color,
         opacity=0.8,
         popup=popup_msg
+    ).add_to(m)
     ).add_to(fg_colored)
     
-    # Draw plain coverage line
+    # Draw the plain coverage line (using a deep blue) and add it to the "fg_coverage" layer
     folium.PolyLine(
-        locations=route_coords,
+        locations=[start_coords, end_coords],
         weight=6,
         color="#003399", 
         opacity=0.7,
         popup=popup_msg
     ).add_to(fg_coverage)
-    
-    # Be polite to the free server
-    time.sleep(1)
 
-# Add layers and menu to the map
+# Add both layers to the map
 fg_colored.add_to(m)
 fg_coverage.add_to(m)
+
+# Add the menu to the top right corner so you can actually toggle them
 folium.LayerControl().add_to(m)
 
 # 6. SAVE
 m.save("manhattan_walklog_map.html")
-print("SUCCESS: manhattan_walklog_map.html generated with street snapping.")
+print("SUCCESS: manhattan_walklog_map.html generated.")
 
 # 7. TIMESTAMP CACHE
 if "Timestamp" in df_clean.columns:
