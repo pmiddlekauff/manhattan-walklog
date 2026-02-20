@@ -17,7 +17,7 @@ except Exception as e:
     print(f"CRITICAL ERROR: Could not load spreadsheet: {e}")
     exit(1)
 
-# 3. COORDINATE ALIGNMENT (Columns L-O)
+# 3. COORDINATE ALIGNMENT
 geo_cols = ["Start Lat", "Start Lon", "End Lat", "End Lon"]
 print(f"Headers found in sheet: {list(df.columns)}")
 
@@ -45,25 +45,44 @@ side_colors = {
     "BOTH": "orange", "UNKNOWN": "gray"
 }
 
+# --- THE FIX: Create our toggleable layers ---
+fg_colored = folium.FeatureGroup(name="Color Coded by Side")
+fg_coverage = folium.FeatureGroup(name="Plain Coverage", show=False) # 'show=False' turns this off by default when you load the page
+
 # 5. DRAW THE LINES
 for _, row in df_clean.iterrows():
     start_coords = [row["Start Lat"], row["Start Lon"]]
     end_coords = [row["End Lat"], row["End Lon"]]
     
-    # Use 'Side' as found in your log headers
     raw_side = str(row.get("Side", "UNKNOWN")).strip().upper()
     line_color = side_colors.get(raw_side, "gray")
     
     popup_msg = f"<b>{row.get('Street Name', 'Unknown St')}</b><br>Side: {raw_side}"
     
-    # Corrected syntax: .add_to(m) instead of .add(m)
+    # Draw the colored line and add it to the "fg_colored" layer
     folium.PolyLine(
         locations=[start_coords, end_coords],
         weight=6,
         color=line_color,
         opacity=0.8,
         popup=popup_msg
-    ).add_to(m)
+    ).add_to(fg_colored)
+    
+    # Draw the plain coverage line (using a deep blue) and add it to the "fg_coverage" layer
+    folium.PolyLine(
+        locations=[start_coords, end_coords],
+        weight=6,
+        color="#003399", 
+        opacity=0.7,
+        popup=popup_msg
+    ).add_to(fg_coverage)
+
+# Add both layers to the map
+fg_colored.add_to(m)
+fg_coverage.add_to(m)
+
+# Add the menu to the top right corner so you can actually toggle them
+folium.LayerControl().add_to(m)
 
 # 6. SAVE
 m.save("manhattan_walklog_map.html")
