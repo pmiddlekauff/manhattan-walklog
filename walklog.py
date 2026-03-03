@@ -51,24 +51,82 @@ fg_coverage = folium.FeatureGroup(name="Plain Coverage", show=False)
 
 # 5. DRAW THE LINES
 for _, row in df_clean.iterrows():
-    start_coords = [row["Start Lat"], row["Start Lon"]]
-    end_coords = [row["End Lat"], row["End Lon"]]
+    start_lat, start_lon = row["Start Lat"], row["Start Lon"]
+    end_lat, end_lon = row["End Lat"], row["End Lon"]
     
     raw_side = str(row.get("Side", "UNKNOWN")).strip().upper()
     line_color = side_colors.get(raw_side, "gray")
     
+    # --- THE NUDGE LOGIC ---
+    lat_nudge = 0.00003  # ~10 feet North/South
+    lon_nudge = 0.00004  # ~10 feet East/West
+
+    lat_shift = 0
+    lon_shift = 0
+
+    if raw_side == "N":
+        lat_shift = lat_nudge
+    elif raw_side == "S":
+        lat_shift = -lat_nudge
+    elif raw_side == "E":
+        lon_shift = lon_nudge
+    elif raw_side == "W":
+        lon_shift = -lon_nudge
+
+    # Apply shift to start and end
+    start_coords = [start_lat + lat_shift, start_lon + lon_shift]
+    end_coords = [end_lat + lat_shift, end_lon + lon_shift]
+    
+    # Build the line sequence, starting with the first coordinate
+    path_locations = [start_coords]
+    
+    # Check for Midpoint 1 and add it to the path if it exists
+    if "Mid 1 Lat" in df.columns and "Mid 1 Lon" in df.columns:
+        m1_lat, m1_lon = row.get("Mid 1 Lat"), row.get("Mid 1 Lon")
+        if pd.notna(m1_lat) and pd.notna(m1_lon):
+            path_locations.append([m1_lat + lat_shift, m1_lon + lon_shift])
+            
+    # Check for Midpoint 2 and add it to the path if it exists
+    if "Mid 2 Lat" in df.columns and "Mid 2 Lon" in df.columns:
+        m2_lat, m2_lon = row.get("Mid 2 Lat"), row.get("Mid 2 Lon")
+        if pd.notna(m2_lat) and pd.notna(m2_lon):
+            path_locations.append([m2_lat + lat_shift, m2_lon + lon_shift])
+            
+    # Check for Midpoint 3 and add it to the path if it exists
+    if "Mid 3 Lat" in df.columns and "Mid 3 Lon" in df.columns:
+        m3_lat, m3_lon = row.get("Mid 3 Lat"), row.get("Mid 3 Lon")
+        if pd.notna(m3_lat) and pd.notna(m3_lon):
+            path_locations.append([m3_lat + lat_shift, m3_lon + lon_shift])
+    
+    # Check for Midpoint 4 and add it to the path if it exists
+    if "Mid 4 Lat" in df.columns and "Mid 4 Lon" in df.columns:
+        m4_lat, m4_lon = row.get("Mid 4 Lat"), row.get("Mid 4 Lon")
+        if pd.notna(m4_lat) and pd.notna(m4_lon):
+            path_locations.append([m4_lat + lat_shift, m4_lon + lon_shift])
+
+    # Check for Midpoint 5 and add it to the path if it exists
+    if "Mid 5 Lat" in df.columns and "Mid 5 Lon" in df.columns:
+        m5_lat, m5_lon = row.get("Mid 5 Lat"), row.get("Mid 5 Lon")
+        if pd.notna(m5_lat) and pd.notna(m5_lon):
+            path_locations.append([m5_lat + lat_shift, m5_lon + lon_shift])
+            
+    # Cap the path off with the final coordinate
+    path_locations.append(end_coords)
+    
     popup_msg = f"<b>{row.get('Street Name', 'Unknown St')}</b><br>Side: {raw_side}"
     
+    # Draw colored line
     folium.PolyLine(
-        locations=[start_coords, end_coords],
+        locations=path_locations,
         weight=6,
         color=line_color,
         opacity=0.8,
         popup=popup_msg
     ).add_to(fg_colored)
     
+    # Draw plain coverage line
     folium.PolyLine(
-        locations=[start_coords, end_coords],
+        locations=path_locations,
         weight=6,
         color="#003399", 
         opacity=0.7,
@@ -89,3 +147,4 @@ if "Timestamp" in df_clean.columns:
     latest_ts = str(df_clean["Timestamp"].iloc[-1])
     with open("last_run.txt", "w") as f:
         f.write(latest_ts)
+
