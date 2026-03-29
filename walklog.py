@@ -40,8 +40,7 @@ avg_lat = df_clean["Start Lat"].mean()
 avg_lon = df_clean["Start Lon"].mean()
 m = folium.Map(location=[avg_lat, avg_lon], zoom_start=14, tiles="OpenStreetMap")
 
-# 8 distinct, high-contrast colors. 
-# IMPORTANT: Update keys like "N-E" to match the exact text in your "Side" column!
+# 8 distinct colors mapping to the combined "Side-Direction" string
 side_colors = {
     "N-E": "#e6194B", # Red
     "N-W": "#3cb44b", # Green
@@ -51,21 +50,29 @@ side_colors = {
     "E-S": "#911eb4", # Purple
     "W-N": "#46f0f0", # Cyan
     "W-S": "#f032e6", # Magenta
-    "BOTH": "white",
     "UNKNOWN": "gray"
 }
 
-# Layers for toggling - Default views swapped here
-fg_coverage = folium.FeatureGroup(name="Plain Coverage", show=True)  # Shows by default
-fg_colored = folium.FeatureGroup(name="Color Coded by Side", show=False) # Hidden by default
+# Layers for toggling
+fg_coverage = folium.FeatureGroup(name="Plain Coverage", show=True) 
+fg_colored = folium.FeatureGroup(name="Color Coded by Side & Direction", show=False)
 
 # 5. DRAW THE LINES
 for _, row in df_clean.iterrows():
     start_lat, start_lon = row["Start Lat"], row["Start Lon"]
     end_lat, end_lon = row["End Lat"], row["End Lon"]
     
-    raw_side = str(row.get("Side", "UNKNOWN")).strip().upper()
-    line_color = side_colors.get(raw_side, "gray")
+    # Grab both Side and Direction columns separately
+    raw_side = str(row.get("Side", "")).strip().upper()
+    raw_dir = str(row.get("Direction", "")).strip().upper()
+    
+    # Combine them to match our dictionary keys (e.g., "N-E")
+    if raw_side and raw_dir and raw_side != "NAN" and raw_dir != "NAN":
+        combo_key = f"{raw_side}-{raw_dir}"
+    else:
+        combo_key = "UNKNOWN"
+        
+    line_color = side_colors.get(combo_key, "gray")
     
     # --- THE NUDGE LOGIC ---
     lat_nudge = 0.00003  # ~10 feet North/South
@@ -74,22 +81,21 @@ for _, row in df_clean.iterrows():
     lat_shift = 0
     lon_shift = 0
 
-    # Checks if the letter is anywhere in the string to allow composite nudging
-    if "N" in raw_side:
-        lat_shift += lat_nudge
-    elif "S" in raw_side:
-        lat_shift -= lat_nudge
-
-    if "E" in raw_side:
-        lon_shift += lon_nudge
-    elif "W" in raw_side:
-        lon_shift -= lon_nudge
+    # We only shift based on the SIDE of the street walked
+    if raw_side == "N":
+        lat_shift = lat_nudge
+    elif raw_side == "S":
+        lat_shift = -lat_nudge
+    elif raw_side == "E":
+        lon_shift = lon_nudge
+    elif raw_side == "W":
+        lon_shift = -lon_nudge
 
     # Apply shift to start and end
     start_coords = [start_lat + lat_shift, start_lon + lon_shift]
     end_coords = [end_lat + lat_shift, end_lon + lon_shift]
     
-    # Build the line sequence, starting with the first coordinate
+    # Build the line sequence
     path_locations = [start_coords]
     
     # Check for Midpoints 1 through 5 dynamically
@@ -104,9 +110,9 @@ for _, row in df_clean.iterrows():
     # Cap the path off with the final coordinate
     path_locations.append(end_coords)
     
-    popup_msg = f"<b>{row.get('Street Name', 'Unknown St')}</b><br>Side: {raw_side}"
+    popup_msg = f"<b>{row.get('Street Name', 'Unknown St')}</b><br>Side: {raw_side}<br>Dir: {raw_dir}"
     
-    # Draw plain coverage line (now adding to fg_coverage)
+    # Draw plain coverage line
     folium.PolyLine(
         locations=path_locations,
         weight=6,
@@ -115,7 +121,7 @@ for _, row in df_clean.iterrows():
         popup=popup_msg
     ).add_to(fg_coverage)
     
-    # Draw colored line (now adding to fg_colored)
+    # Draw colored line
     folium.PolyLine(
         locations=path_locations,
         weight=6,
