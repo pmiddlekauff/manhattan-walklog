@@ -40,14 +40,24 @@ avg_lat = df_clean["Start Lat"].mean()
 avg_lon = df_clean["Start Lon"].mean()
 m = folium.Map(location=[avg_lat, avg_lon], zoom_start=14, tiles="OpenStreetMap")
 
+# 8 distinct, high-contrast colors. 
+# IMPORTANT: Update keys like "N-E" to match the exact text in your "Side" column!
 side_colors = {
-    "N": "blue", "S": "red", "E": "green", "W": "purple", 
-    "BOTH": "orange", "UNKNOWN": "gray"
+    "N-E": "#e6194B", # Red
+    "N-W": "#3cb44b", # Green
+    "S-E": "#ffe119", # Yellow
+    "S-W": "#4363d8", # Blue
+    "E-N": "#f58231", # Orange
+    "E-S": "#911eb4", # Purple
+    "W-N": "#46f0f0", # Cyan
+    "W-S": "#f032e6", # Magenta
+    "BOTH": "white",
+    "UNKNOWN": "gray"
 }
 
-# Layers for toggling
-fg_colored = folium.FeatureGroup(name="Color Coded by Side")
-fg_coverage = folium.FeatureGroup(name="Plain Coverage", show=False) 
+# Layers for toggling - Default views swapped here
+fg_coverage = folium.FeatureGroup(name="Plain Coverage", show=True)  # Shows by default
+fg_colored = folium.FeatureGroup(name="Color Coded by Side", show=False) # Hidden by default
 
 # 5. DRAW THE LINES
 for _, row in df_clean.iterrows():
@@ -64,14 +74,16 @@ for _, row in df_clean.iterrows():
     lat_shift = 0
     lon_shift = 0
 
-    if raw_side == "N":
-        lat_shift = lat_nudge
-    elif raw_side == "S":
-        lat_shift = -lat_nudge
-    elif raw_side == "E":
-        lon_shift = lon_nudge
-    elif raw_side == "W":
-        lon_shift = -lon_nudge
+    # Checks if the letter is anywhere in the string to allow composite nudging
+    if "N" in raw_side:
+        lat_shift += lat_nudge
+    elif "S" in raw_side:
+        lat_shift -= lat_nudge
+
+    if "E" in raw_side:
+        lon_shift += lon_nudge
+    elif "W" in raw_side:
+        lon_shift -= lon_nudge
 
     # Apply shift to start and end
     start_coords = [start_lat + lat_shift, start_lon + lon_shift]
@@ -80,51 +92,21 @@ for _, row in df_clean.iterrows():
     # Build the line sequence, starting with the first coordinate
     path_locations = [start_coords]
     
-    # Check for Midpoint 1 and add it to the path if it exists
-    if "Mid 1 Lat" in df.columns and "Mid 1 Lon" in df.columns:
-        m1_lat, m1_lon = row.get("Mid 1 Lat"), row.get("Mid 1 Lon")
-        if pd.notna(m1_lat) and pd.notna(m1_lon):
-            path_locations.append([m1_lat + lat_shift, m1_lon + lon_shift])
-            
-    # Check for Midpoint 2 and add it to the path if it exists
-    if "Mid 2 Lat" in df.columns and "Mid 2 Lon" in df.columns:
-        m2_lat, m2_lon = row.get("Mid 2 Lat"), row.get("Mid 2 Lon")
-        if pd.notna(m2_lat) and pd.notna(m2_lon):
-            path_locations.append([m2_lat + lat_shift, m2_lon + lon_shift])
-            
-    # Check for Midpoint 3 and add it to the path if it exists
-    if "Mid 3 Lat" in df.columns and "Mid 3 Lon" in df.columns:
-        m3_lat, m3_lon = row.get("Mid 3 Lat"), row.get("Mid 3 Lon")
-        if pd.notna(m3_lat) and pd.notna(m3_lon):
-            path_locations.append([m3_lat + lat_shift, m3_lon + lon_shift])
-    
-    # Check for Midpoint 4 and add it to the path if it exists
-    if "Mid 4 Lat" in df.columns and "Mid 4 Lon" in df.columns:
-        m4_lat, m4_lon = row.get("Mid 4 Lat"), row.get("Mid 4 Lon")
-        if pd.notna(m4_lat) and pd.notna(m4_lon):
-            path_locations.append([m4_lat + lat_shift, m4_lon + lon_shift])
-
-    # Check for Midpoint 5 and add it to the path if it exists
-    if "Mid 5 Lat" in df.columns and "Mid 5 Lon" in df.columns:
-        m5_lat, m5_lon = row.get("Mid 5 Lat"), row.get("Mid 5 Lon")
-        if pd.notna(m5_lat) and pd.notna(m5_lon):
-            path_locations.append([m5_lat + lat_shift, m5_lon + lon_shift])
+    # Check for Midpoints 1 through 5 dynamically
+    for i in range(1, 6):
+        mid_lat_col = f"Mid {i} Lat"
+        mid_lon_col = f"Mid {i} Lon"
+        if mid_lat_col in df.columns and mid_lon_col in df.columns:
+            m_lat, m_lon = row.get(mid_lat_col), row.get(mid_lon_col)
+            if pd.notna(m_lat) and pd.notna(m_lon):
+                path_locations.append([m_lat + lat_shift, m_lon + lon_shift])
             
     # Cap the path off with the final coordinate
     path_locations.append(end_coords)
     
     popup_msg = f"<b>{row.get('Street Name', 'Unknown St')}</b><br>Side: {raw_side}"
     
-    # Draw colored line
-    folium.PolyLine(
-        locations=path_locations,
-        weight=6,
-        color=line_color,
-        opacity=0.8,
-        popup=popup_msg
-    ).add_to(fg_colored)
-    
-    # Draw plain coverage line
+    # Draw plain coverage line (now adding to fg_coverage)
     folium.PolyLine(
         locations=path_locations,
         weight=6,
@@ -132,10 +114,19 @@ for _, row in df_clean.iterrows():
         opacity=0.7,
         popup=popup_msg
     ).add_to(fg_coverage)
+    
+    # Draw colored line (now adding to fg_colored)
+    folium.PolyLine(
+        locations=path_locations,
+        weight=6,
+        color=line_color,
+        opacity=0.8,
+        popup=popup_msg
+    ).add_to(fg_colored)
 
 # Add layers and menu
-fg_colored.add_to(m)
 fg_coverage.add_to(m)
+fg_colored.add_to(m)
 folium.LayerControl().add_to(m)
 
 # 6. SAVE
@@ -147,4 +138,3 @@ if "Timestamp" in df_clean.columns:
     latest_ts = str(df_clean["Timestamp"].iloc[-1])
     with open("last_run.txt", "w") as f:
         f.write(latest_ts)
-
