@@ -2,6 +2,7 @@ import pandas as pd
 import folium
 import math
 import os
+from branca.element import Template, MacroElement
 
 # 1. SETTINGS & URL
 SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1eTzd_iG590gVdbu6q7p0iDElsCVLr9QTSP1wRWagozg/export?format=csv&gid=1407515623"
@@ -62,11 +63,9 @@ for _, row in df_clean.iterrows():
     start_lat, start_lon = row["Start Lat"], row["Start Lon"]
     end_lat, end_lon = row["End Lat"], row["End Lon"]
     
-    # Grab both Side and Direction columns separately
     raw_side = str(row.get("Side", "")).strip().upper()
     raw_dir = str(row.get("Direction", "")).strip().upper()
     
-    # Combine them to match our dictionary keys (e.g., "N-E")
     if raw_side and raw_dir and raw_side != "NAN" and raw_dir != "NAN":
         combo_key = f"{raw_side}-{raw_dir}"
     else:
@@ -81,7 +80,6 @@ for _, row in df_clean.iterrows():
     lat_shift = 0
     lon_shift = 0
 
-    # We only shift based on the SIDE of the street walked
     if raw_side == "N":
         lat_shift = lat_nudge
     elif raw_side == "S":
@@ -91,14 +89,11 @@ for _, row in df_clean.iterrows():
     elif raw_side == "W":
         lon_shift = -lon_nudge
 
-    # Apply shift to start and end
     start_coords = [start_lat + lat_shift, start_lon + lon_shift]
     end_coords = [end_lat + lat_shift, end_lon + lon_shift]
     
-    # Build the line sequence
     path_locations = [start_coords]
     
-    # Check for Midpoints 1 through 5 dynamically
     for i in range(1, 6):
         mid_lat_col = f"Mid {i} Lat"
         mid_lon_col = f"Mid {i} Lon"
@@ -107,12 +102,10 @@ for _, row in df_clean.iterrows():
             if pd.notna(m_lat) and pd.notna(m_lon):
                 path_locations.append([m_lat + lat_shift, m_lon + lon_shift])
             
-    # Cap the path off with the final coordinate
     path_locations.append(end_coords)
     
     popup_msg = f"<b>{row.get('Street Name', 'Unknown St')}</b><br>Side: {raw_side}<br>Dir: {raw_dir}"
     
-    # Draw plain coverage line
     folium.PolyLine(
         locations=path_locations,
         weight=6,
@@ -121,7 +114,6 @@ for _, row in df_clean.iterrows():
         popup=popup_msg
     ).add_to(fg_coverage)
     
-    # Draw colored line
     folium.PolyLine(
         locations=path_locations,
         weight=6,
@@ -130,17 +122,33 @@ for _, row in df_clean.iterrows():
         popup=popup_msg
     ).add_to(fg_colored)
 
-# Add layers and menu
 fg_coverage.add_to(m)
 fg_colored.add_to(m)
 folium.LayerControl().add_to(m)
 
-# 6. SAVE
-m.save("manhattan_walklog_map.html")
-print("SUCCESS: manhattan_walklog_map.html generated.")
+# 6. DYNAMIC LEGEND GENERATION
+legend_template = """
+{% macro html(this, kwargs) %}
+<div id='maplegend' class='maplegend' 
+    style='position: absolute; z-index:9999; border:2px solid grey; background-color:rgba(255, 255, 255, 0.9);
+    border-radius:6px; padding: 10px; font-size:14px; right: 20px; bottom: 20px; display: none;'>
+<div class='legend-title'>Side & Direction</div>
+<div class='legend-scale'>
+  <ul class='legend-labels' style='list-style-type:none; padding:0; margin:0;'>
+    <li><span style='background:#e6194B; opacity: 0.8;'></span>North Side, Eastbound (N-E)</li>
+    <li><span style='background:#3cb44b; opacity: 0.8;'></span>North Side, Westbound (N-W)</li>
+    <li><span style='background:#ffe119; opacity: 0.8;'></span>South Side, Eastbound (S-E)</li>
+    <li><span style='background:#4363d8; opacity: 0.8;'></span>South Side, Westbound (S-W)</li>
+    <li><span style='background:#f58231; opacity: 0.8;'></span>East Side, Northbound (E-N)</li>
+    <li><span style='background:#911eb4; opacity: 0.8;'></span>East Side, Southbound (E-S)</li>
+    <li><span style='background:#46f0f0; opacity: 0.8;'></span>West Side, Northbound (W-N)</li>
+    <li><span style='background:#f032e6; opacity: 0.8;'></span>West Side, Southbound (W-S)</li>
+    <li><span style='background:gray; opacity: 0.8;'></span>Unknown</li>
+  </ul>
+</div>
+</div>
 
-# 7. TIMESTAMP CACHE
-if "Timestamp" in df_clean.columns:
-    latest_ts = str(df_clean["Timestamp"].iloc[-1])
-    with open("last_run.txt", "w") as f:
-        f.write(latest_ts)
+<style type='text/css'>
+  .maplegend .legend-title { text-align: left; margin-bottom: 5px; font-weight: bold; font-size: 90%; }
+  .maplegend .legend-scale ul { margin: 0; margin-bottom: 5px; padding: 0; float: left; list-style: none; }
+  .maplegend .legend-scale ul li { font-size:
