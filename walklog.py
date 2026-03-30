@@ -129,48 +129,60 @@ folium.LayerControl().add_to(m)
 # 6. DYNAMIC LEGEND GENERATION
 legend_template = """
 {% macro html(this, kwargs) %}
-<div id='maplegend' class='maplegend' 
-    style='position: absolute; z-index:9999; border:2px solid grey; background-color:rgba(255, 255, 255, 0.9);
-    border-radius:6px; padding: 10px; font-size:14px; right: 20px; bottom: 20px; display: none;'>
+<div id='maplegend' class='maplegend'>
 <div class='legend-title'>Side & Direction</div>
 <div class='legend-scale'>
-  <ul class='legend-labels' style='list-style-type:none; padding:0; margin:0;'>
-    <li><span style='background:#e6194B; opacity: 0.8;'></span>North Side, Eastbound (N-E)</li>
-    <li><span style='background:#3cb44b; opacity: 0.8;'></span>North Side, Westbound (N-W)</li>
-    <li><span style='background:#ffe119; opacity: 0.8;'></span>South Side, Eastbound (S-E)</li>
-    <li><span style='background:#4363d8; opacity: 0.8;'></span>South Side, Westbound (S-W)</li>
-    <li><span style='background:#f58231; opacity: 0.8;'></span>East Side, Northbound (E-N)</li>
-    <li><span style='background:#911eb4; opacity: 0.8;'></span>East Side, Southbound (E-S)</li>
-    <li><span style='background:#46f0f0; opacity: 0.8;'></span>West Side, Northbound (W-N)</li>
-    <li><span style='background:#f032e6; opacity: 0.8;'></span>West Side, Southbound (W-S)</li>
-    <li><span style='background:gray; opacity: 0.8;'></span>Unknown</li>
+  <ul class='legend-labels'>
+    <li><span></span>North Side, Eastbound (N-E)</li>
+    <li><span style='background:#3cb44b;'></span>North Side, Westbound (N-W)</li>
+    <li><span style='background:#ffe119;'></span>South Side, Eastbound (S-E)</li>
+    <li><span style='background:#4363d8;'></span>South Side, Westbound (S-W)</li>
+    <li><span style='background:#f58231;'></span>East Side, Northbound (E-N)</li>
+    <li><span style='background:#911eb4;'></span>East Side, Southbound (E-S)</li>
+    <li><span style='background:#46f0f0;'></span>West Side, Northbound (W-N)</li>
+    <li><span style='background:#f032e6;'></span>West Side, Southbound (W-S)</li>
+    <li><span style='background:gray;'></span>Unknown</li>
   </ul>
 </div>
 </div>
 
 <style type='text/css'>
+  /* Default Desktop Styles */
+  .maplegend {
+    position: absolute; z-index:9999; border:2px solid grey; 
+    background-color:rgba(255, 255, 255, 0.9); border-radius:6px; 
+    padding: 10px; font-size:14px; right: 20px; bottom: 20px; display: none;
+  }
   .maplegend .legend-title { text-align: left; margin-bottom: 5px; font-weight: bold; font-size: 90%; }
-  .maplegend .legend-scale ul { margin: 0; margin-bottom: 5px; padding: 0; float: left; list-style: none; }
-  .maplegend .legend-scale ul li { font-size: 80%; list-style: none; margin-left: 0; line-height: 18px; margin-bottom: 2px; }
-  .maplegend ul.legend-labels li span { display: block; float: left; height: 16px; width: 30px; margin-right: 5px; margin-left: 0; border: 1px solid #999; }
+  .maplegend .legend-scale ul { margin: 0; padding: 0; list-style: none; }
+  .maplegend .legend-scale ul li { font-size: 80%; list-style: none; line-height: 18px; margin-bottom: 2px; }
+  .maplegend ul.legend-labels li span { display: block; float: left; height: 16px; width: 30px; margin-right: 5px; border: 1px solid #999; }
+  
+  /* Mobile Styles (Triggers on phone screens) */
+  @media (max-width: 600px) {
+    .maplegend {
+      right: 10px; bottom: 30px; /* Shifts up to avoid iOS home bar */
+      padding: 6px; font-size: 11px; /* Shrinks overall text size */
+      max-width: 180px; /* Prevents stretching across the screen */
+    }
+    .maplegend .legend-scale ul li { line-height: 14px; margin-bottom: 4px; }
+    .maplegend ul.legend-labels li span { height: 12px; width: 20px; } /* Shrinks the color boxes */
+  }
 </style>
 
 <script>
-// Wait for Leaflet map to initialize, then hook into the layer toggle events
 document.addEventListener("DOMContentLoaded", function(event) {
     setTimeout(function() {
         var map_keys = Object.keys(window).filter(k => k.startsWith('map_'));
         if(map_keys.length > 0) {
             var myMap = window[map_keys[0]];
             
-            // Show legend when colored layer is turned on
             myMap.on('overlayadd', function(eventLayer) {
                 if (eventLayer.name === 'Color Coded by Side & Direction') {
                     document.getElementById('maplegend').style.display = 'block';
                 }
             });
             
-            // Hide legend when colored layer is turned off
             myMap.on('overlayremove', function(eventLayer) {
                 if (eventLayer.name === 'Color Coded by Side & Direction') {
                     document.getElementById('maplegend').style.display = 'none';
@@ -182,10 +194,6 @@ document.addEventListener("DOMContentLoaded", function(event) {
 </script>
 {% endmacro %}
 """
-
-macro = MacroElement()
-macro._template = Template(legend_template)
-m.get_root().add_child(macro)
 
 # 7. SAVE
 m.save("manhattan_walklog_map.html")
