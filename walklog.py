@@ -171,25 +171,30 @@ legend_template = """
 </style>
 
 <script>
-document.addEventListener("DOMContentLoaded", function(event) {
-    setTimeout(function() {
+document.addEventListener("DOMContentLoaded", function() {
+    // Check every 200ms until the map is fully loaded
+    var checkMap = setInterval(function() {
         var map_keys = Object.keys(window).filter(k => k.startsWith('map_'));
+        
         if(map_keys.length > 0) {
+            clearInterval(checkMap); // Stop checking once we find the map
             var myMap = window[map_keys[0]];
             
+            // Listen for the layer turning ON (using .includes to avoid the '&' bug)
             myMap.on('overlayadd', function(eventLayer) {
-                if (eventLayer.name === 'Color Coded by Side & Direction') {
+                if (eventLayer.name.includes('Color Coded')) {
                     document.getElementById('maplegend').style.display = 'block';
                 }
             });
             
+            // Listen for the layer turning OFF
             myMap.on('overlayremove', function(eventLayer) {
-                if (eventLayer.name === 'Color Coded by Side & Direction') {
+                if (eventLayer.name.includes('Color Coded')) {
                     document.getElementById('maplegend').style.display = 'none';
                 }
             });
         }
-    }, 500);
+    }, 200);
 });
 </script>
 {% endmacro %}
