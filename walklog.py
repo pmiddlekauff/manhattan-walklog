@@ -133,7 +133,7 @@ legend_template = """
 <div class='legend-title'>Side & Direction</div>
 <div class='legend-scale'>
   <ul class='legend-labels'>
-    <li><span></span>North Side, Eastbound (N-E)</li>
+    <li><span style='background:#e6194B;'></span>North Side, Eastbound (N-E)</li>
     <li><span style='background:#3cb44b;'></span>North Side, Westbound (N-W)</li>
     <li><span style='background:#ffe119;'></span>South Side, Eastbound (S-E)</li>
     <li><span style='background:#4363d8;'></span>South Side, Westbound (S-W)</li>
@@ -171,34 +171,29 @@ legend_template = """
 </style>
 
 <script>
-document.addEventListener("DOMContentLoaded", function() {
-    // Check every 200ms until the map is fully loaded
-    var checkMap = setInterval(function() {
-        var map_keys = Object.keys(window).filter(k => k.startsWith('map_'));
+// Listen for ANY checkbox changes on the entire page
+document.addEventListener('change', function(e) {
+    // Check if the thing that changed was a checkbox
+    if (e.target && e.target.type === 'checkbox') {
+        // Grab the text right next to the checkbox
+        var labelText = e.target.parentElement.textContent || "";
         
-        if(map_keys.length > 0) {
-            clearInterval(checkMap); // Stop checking once we find the map
-            var myMap = window[map_keys[0]];
-            
-            // Listen for the layer turning ON (using .includes to avoid the '&' bug)
-            myMap.on('overlayadd', function(eventLayer) {
-                if (eventLayer.name.includes('Color Coded')) {
-                    document.getElementById('maplegend').style.display = 'block';
-                }
-            });
-            
-            // Listen for the layer turning OFF
-            myMap.on('overlayremove', function(eventLayer) {
-                if (eventLayer.name.includes('Color Coded')) {
-                    document.getElementById('maplegend').style.display = 'none';
-                }
-            });
+        // If it's our specific layer, toggle the legend!
+        if (labelText.includes('Color Coded')) {
+            var legend = document.getElementById('maplegend');
+            if (legend) {
+                legend.style.display = e.target.checked ? 'block' : 'none';
+            }
         }
-    }, 200);
+    }
 });
 </script>
 {% endmacro %}
 """
+
+macro = MacroElement()
+macro._template = Template(legend_template)
+m.get_root().add_child(macro)
 
 # 7. SAVE
 m.save("manhattan_walklog_map.html")
