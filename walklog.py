@@ -151,4 +151,48 @@ legend_template = """
 <style type='text/css'>
   .maplegend .legend-title { text-align: left; margin-bottom: 5px; font-weight: bold; font-size: 90%; }
   .maplegend .legend-scale ul { margin: 0; margin-bottom: 5px; padding: 0; float: left; list-style: none; }
-  .maplegend .legend-scale ul li { font-size:
+  .maplegend .legend-scale ul li { font-size: 80%; list-style: none; margin-left: 0; line-height: 18px; margin-bottom: 2px; }
+  .maplegend ul.legend-labels li span { display: block; float: left; height: 16px; width: 30px; margin-right: 5px; margin-left: 0; border: 1px solid #999; }
+</style>
+
+<script>
+// Wait for Leaflet map to initialize, then hook into the layer toggle events
+document.addEventListener("DOMContentLoaded", function(event) {
+    setTimeout(function() {
+        var map_keys = Object.keys(window).filter(k => k.startsWith('map_'));
+        if(map_keys.length > 0) {
+            var myMap = window[map_keys[0]];
+            
+            // Show legend when colored layer is turned on
+            myMap.on('overlayadd', function(eventLayer) {
+                if (eventLayer.name === 'Color Coded by Side & Direction') {
+                    document.getElementById('maplegend').style.display = 'block';
+                }
+            });
+            
+            // Hide legend when colored layer is turned off
+            myMap.on('overlayremove', function(eventLayer) {
+                if (eventLayer.name === 'Color Coded by Side & Direction') {
+                    document.getElementById('maplegend').style.display = 'none';
+                }
+            });
+        }
+    }, 500);
+});
+</script>
+{% endmacro %}
+"""
+
+macro = MacroElement()
+macro._template = Template(legend_template)
+m.get_root().add_child(macro)
+
+# 7. SAVE
+m.save("manhattan_walklog_map.html")
+print("SUCCESS: manhattan_walklog_map.html generated.")
+
+# 8. TIMESTAMP CACHE
+if "Timestamp" in df_clean.columns:
+    latest_ts = str(df_clean["Timestamp"].iloc[-1])
+    with open("last_run.txt", "w") as f:
+        f.write(latest_ts)
