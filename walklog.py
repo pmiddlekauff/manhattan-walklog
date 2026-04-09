@@ -66,6 +66,11 @@ for _, row in df_clean.iterrows():
     raw_side = str(row.get("Side", "")).strip().upper()
     raw_dir = str(row.get("Direction", "")).strip().upper()
     
+    # Grab the timestamp, defaulting to "Unknown Date" if missing
+    raw_ts = str(row.get("Timestamp", "Unknown Date")).strip()
+    if raw_ts.lower() == "nan":
+        raw_ts = "Unknown Date"
+    
     if raw_side and raw_dir and raw_side != "NAN" and raw_dir != "NAN":
         combo_key = f"{raw_side}-{raw_dir}"
     else:
@@ -104,7 +109,8 @@ for _, row in df_clean.iterrows():
             
     path_locations.append(end_coords)
     
-    popup_msg = f"<b>{row.get('Street Name', 'Unknown St')}</b><br>Side: {raw_side}<br>Dir: {raw_dir}"
+    # Updated popup message to include Date/Time
+    popup_msg = f"<b>{row.get('Street Name', 'Unknown St')}</b><br>Date: {raw_ts}<br>Side: {raw_side}<br>Dir: {raw_dir}"
     
     folium.PolyLine(
         locations=path_locations,
