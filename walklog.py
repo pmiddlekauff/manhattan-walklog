@@ -18,10 +18,29 @@ except Exception as e:
     print(f"CRITICAL ERROR: Could not load spreadsheet: {e}")
     exit(1)
 
+# --- NEW: DYNAMICALLY EXTRACT PERCENT WALKED ---
+percent_str = "0%"
+percent_col = next((col for col in df.columns if "percent" in col.lower() and "walked" in col.lower()), None)
+
+if percent_col and len(df) > 0:
+    raw_val = df[percent_col].iloc[0]  # Grab the second row (index 0)
+    if pd.notna(raw_val):
+        # If pandas parsed it as a number, format it cleanly
+        if isinstance(raw_val, (int, float)):
+            if raw_val <= 1.0:
+                percent_str = f"{raw_val * 100:.1f}%"
+            else:
+                percent_str = f"{raw_val:.1f}%"
+        else:
+            percent_str = str(raw_val).strip()
+            
+print(f"Extracted Progress Stats: {percent_str} Walked")
+
 # 3. COORDINATE ALIGNMENT
 geo_cols = ["Start Lat", "Start Lon", "End Lat", "End Lon"]
 print(f"Headers found in sheet: {list(df.columns)}")
 
+# Force Start and End coordinates to be numeric
 for col in geo_cols:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -29,6 +48,14 @@ for col in geo_cols:
         print(f"ERROR: Could not find column '{col}'.")
         exit(1)
 
+# Force Midpoint coordinates to be numeric (without dropping empty ones)
+for i in range(1, 6):
+    for axis in ["Lat", "Lon"]:
+        mid_col = f"Mid {i} {axis}"
+        if mid_col in df.columns:
+            df[mid_col] = pd.to_numeric(df[mid_col], errors='coerce')
+
+# Only drop rows that are missing Start or End coordinates
 df_clean = df.dropna(subset=geo_cols).copy()
 print(f"Processing {len(df_clean)} valid walks with coordinates.")
 
@@ -54,8 +81,8 @@ side_colors = {
     "UNKNOWN": "gray"
 }
 
-# Layers for toggling
-fg_coverage = folium.FeatureGroup(name="Plain Coverage", show=True) 
+# Layers for toggling (HTML injection used here to show progress right in the panel)
+fg_coverage = folium.FeatureGroup(name=f"Plain Coverage &nbsp;[<b>{percent_str} Walked</b>]", show=True) 
 fg_colored = folium.FeatureGroup(name="Color Coded by Side & Direction", show=False)
 
 # 5. DRAW THE LINES
@@ -66,7 +93,6 @@ for _, row in df_clean.iterrows():
     raw_side = str(row.get("Side", "")).strip().upper()
     raw_dir = str(row.get("Direction", "")).strip().upper()
     
-    # Grab the timestamp, defaulting to "Unknown Date" if missing
     raw_ts = str(row.get("Timestamp", "Unknown Date")).strip()
     if raw_ts.lower() == "nan":
         raw_ts = "Unknown Date"
@@ -78,9 +104,8 @@ for _, row in df_clean.iterrows():
         
     line_color = side_colors.get(combo_key, "gray")
     
-    # --- THE NUDGE LOGIC ---
-    lat_nudge = 0.00003  # ~10 feet North/South
-    lon_nudge = 0.00004  # ~10 feet East/West
+    lat_nudge = 0.00003  
+    lon_nudge = 0.00004  
 
     lat_shift = 0
     lon_shift = 0
@@ -109,7 +134,6 @@ for _, row in df_clean.iterrows():
             
     path_locations.append(end_coords)
     
-    # Updated popup message to include Date/Time
     popup_msg = f"<b>{row.get('Street Name', 'Unknown St')}</b><br>Date: {raw_ts}<br>Side: {raw_side}<br>Dir: {raw_dir}"
     
     folium.PolyLine(
@@ -153,7 +177,6 @@ legend_template = """
 </div>
 
 <style type='text/css'>
-  /* Default Desktop Styles */
   .maplegend {
     position: absolute; z-index:9999; border:2px solid grey; 
     background-color:rgba(255, 255, 255, 0.9); border-radius:6px; 
@@ -164,27 +187,21 @@ legend_template = """
   .maplegend .legend-scale ul li { font-size: 80%; list-style: none; line-height: 18px; margin-bottom: 2px; }
   .maplegend ul.legend-labels li span { display: block; float: left; height: 16px; width: 30px; margin-right: 5px; border: 1px solid #999; }
   
-  /* Mobile Styles (Triggers on phone screens) */
   @media (max-width: 600px) {
     .maplegend {
-      right: 10px; bottom: 30px; /* Shifts up to avoid iOS home bar */
-      padding: 6px; font-size: 11px; /* Shrinks overall text size */
-      max-width: 180px; /* Prevents stretching across the screen */
+      right: 10px; bottom: 30px; 
+      padding: 6px; font-size: 11px; 
+      max-width: 180px; 
     }
     .maplegend .legend-scale ul li { line-height: 14px; margin-bottom: 4px; }
-    .maplegend ul.legend-labels li span { height: 12px; width: 20px; } /* Shrinks the color boxes */
+    .maplegend ul.legend-labels li span { height: 12px; width: 20px; } 
   }
 </style>
 
 <script>
-// Listen for ANY checkbox changes on the entire page
 document.addEventListener('change', function(e) {
-    // Check if the thing that changed was a checkbox
     if (e.target && e.target.type === 'checkbox') {
-        // Grab the text right next to the checkbox
         var labelText = e.target.parentElement.textContent || "";
-        
-        // If it's our specific layer, toggle the legend!
         if (labelText.includes('Color Coded')) {
             var legend = document.getElementById('maplegend');
             if (legend) {
